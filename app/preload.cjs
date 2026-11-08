@@ -14,6 +14,10 @@ contextBridge.exposeInMainWorld('companion', {
   collapseChat: value=>ipcRenderer.send('chat-collapse',!!value),
   cancel: ()=>ipcRenderer.invoke('cancel'),
   openChat: text => ipcRenderer.invoke('chat', text),
+  pickAttachments: ()=>ipcRenderer.invoke('attachments:pick'),
+  addAttachment: value=>ipcRenderer.invoke('attachments:add',value),
+  removeAttachment: id=>ipcRenderer.invoke('attachments:remove',id),
+  onAttachments: fn=>ipcRenderer.on('attachments',(_e,value)=>fn(value)),
   refresh: () => ipcRenderer.invoke('refresh'),
   action: action => ipcRenderer.send('command', action)
 });

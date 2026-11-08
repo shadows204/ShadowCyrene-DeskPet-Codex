@@ -1,7 +1,9 @@
-# ShadowCyrene 0.4.0
+# ShadowCyrene 0.5.0
 
 首次公开发布。独立桌宠，支持 macOS 与 Windows。
 
+- Chat ＋号支持添加文件和图片、直接粘贴图片、拖放文件，并显示可移除的附件预览。PDF/Word 发送提取正文；图片使用真正的图片输入。
+- 附件仅在点击直发后提交；失败或断线保留草稿，6 个／每个 10 MB／合计 20 MB。
 - 程序、人物、Chat 标签及检测插件统一显示 **ShadowCyrene**，五种语言下名字保持一致。
 - 修复图标留白过多、菜单栏只显示一个小点的问题。应用与托盘分别使用头像裁切，支持高清屏；Windows EXE 内嵌新图标与产品名称。
 - Windows 常驻托盘，不占任务栏；托盘单击显示／隐藏，右键可退出。
@@ -12,10 +14,10 @@
 
 | 文件 | 平台 |
 | --- | --- |
-| `ShadowCyrene-0.4.0-macOS-arm64.zip` | Apple Silicon Mac |
-| `ShadowCyrene-0.4.0-macOS-x64.zip` | Intel Mac |
-| `ShadowCyrene-0.4.0-Windows-x64.zip` | Windows 10/11 x64，完整解压后运行 |
-| `ShadowCyrene-0.4.0-source.zip` | 完整源码与素材，不含个人数据 |
+| `ShadowCyrene-0.5.0-macOS-arm64.zip` | Apple Silicon Mac |
+| `ShadowCyrene-0.5.0-macOS-x64.zip` | Intel Mac |
+| `ShadowCyrene-0.5.0-Windows-x64.zip` | Windows 10/11 x64，完整解压后运行 |
+| `ShadowCyrene-0.5.0-source.zip` | 完整源码与素材，不含个人数据 |
 | `SHA256SUMS.txt` | 下载文件校验 |
 
 macOS Apple Silicon 本机验证；Intel Mac 与 Windows x64 完成构建、架构、图标及包内容检查，尚未真机测试。个人构建未签名／公证。

@@ -11,6 +11,21 @@ const {ChatClient}=require('./chat-client.cjs');
 const {installBridge}=require('./plugin-installer.cjs');
 const I18n=require('./i18n.cjs');
 const {migrateUserData,legacyDataName}=require('./migration.cjs');
+const {AttachmentStore,AttachmentError,turnInput,stopDocumentReaders,EXTENSIONS,MAX_FILE_BYTES}=require('./attachments.cjs');
+const attachments=new AttachmentStore({imageProcessor:bytes=>{
+  const image=nativeImage.createFromBuffer(bytes);if(image.isEmpty())throw new AttachmentError('图片无法读取，请改用 PNG、JPEG 或 WebP。');
+  const size=image.getSize();if(size.width*size.height>24000000)throw new AttachmentError('图片分辨率过高，请缩小后添加。');
+  let mime,data=bytes;
+  if(bytes.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))mime='image/png';
+  else if(bytes[0]===255&&bytes[1]===216)mime='image/jpeg';
+  else if(bytes.toString('ascii',0,4)==='RIFF'&&bytes.toString('ascii',8,12)==='WEBP')mime='image/webp';
+  else{mime='image/png';data=image.toPNG();}
+  if(data.length>MAX_FILE_BYTES)throw new AttachmentError('转换后的图片超过10MB，请缩小后添加。');
+  const fit=Math.min(64/size.width,64/size.height,1),preview=image.resize({width:Math.max(1,Math.round(size.width*fit)),height:Math.max(1,Math.round(size.height*fit))}).toDataURL();
+  return{url:`data:${mime};base64,${data.toString('base64')}`,preview};
+}});
+let attachmentsLocked=false;
+let qaLastSubmission;
 const T=(source,vars)=>I18n.t(source,settings?.language,vars);
 const QA = process.argv.includes('--qa');
 const SMOKE = process.argv.includes('--smoke');
@@ -121,6 +136,7 @@ function makeMenu() {
     {label:'显示桌宠与 Chat',click:show},
     item('单击人物显示额度（3秒）','bubble'), item('显示 Chat 输入栏','chat'),
     {label:settings.chatCollapsed?'展开 Chat':'收起 Chat 为圆钮',click:()=>setSetting('chatCollapsed',!settings.chatCollapsed)},
+    {label:'添加文件或图片…',click:pickAttachments},
     {label:state.directReady?'直发已连接 · 桌宠专属会话':'复制并打开官方 Chat',enabled:false},
     {label:'回复显示',submenu:[{label:'关闭',type:'radio',checked:settings.messageMode==='off',click:()=>setSetting('messageMode','off')},{label:'只显示最近一行',type:'radio',checked:settings.messageMode==='single',click:()=>setSetting('messageMode','single')},...[5,6,7].map(n=>({label:`${n}行 · 粉色渐隐`,type:'radio',checked:settings.messageMode==='multi'&&settings.messageLines===n,click:()=>{settings.messageLines=n;setSetting('messageMode','multi');}}))]},
     {label:'大小缩放',submenu:[{label:'整体',submenu:scaleMenu('scale')},{label:'人物',submenu:scaleMenu('petScale')},{label:'Chat输入栏',submenu:scaleMenu('chatScale')},{label:'消息与额度框',submenu:scaleMenu('panelScale')},{label:'恢复100%',click:()=>{for(const k of ['scale','petScale','chatScale','panelScale'])settings[k]=1;saveSettings();broadcast();}}]},
@@ -157,29 +173,58 @@ function makeMenu() {
     {type:'separator'}, {label:'隐藏桌宠',click:()=>{hidden=true;win.hide();}}, {label:'退出ShadowCyrene',click:()=>app.quit()}
   ],settings.language));
 }
-async function openChat(text) {
+function attachmentUpdate(error=''){
+  const value=attachments.snapshot();win?.webContents.send('attachments',value);return{ok:!error,attachments:value,...(error?{error}:{})};
+}
+const attachmentError=e=>e instanceof AttachmentError?e.message:'无法添加附件，请检查文件是否可读。';
+async function pickAttachments(){
+  if(attachmentsLocked)return attachmentUpdate('正在提交消息，请稍候。');
+  win.setIgnoreMouseEvents(false);ignore=false;
+  const result=await dialog.showOpenDialog(win,{title:T('添加文件或图片…'),properties:['openFile','multiSelections'],filters:[{name:T('支持的附件'),extensions:EXTENSIONS}]});
+  if(result.canceled)return attachmentUpdate();let error='';
+  for(const file of result.filePaths){if(attachmentsLocked){error='正在提交消息，请稍候。';break;}try{await attachments.addPath(file);}catch(e){error=attachmentError(e);}}
+  win.webContents.send('action','focus');return attachmentUpdate(error);
+}
+async function openChat(value) {
+  const text=typeof value==='string'?value:value?.text,ids=typeof value==='string'?[]:value?.attachmentIds||[];
   if (typeof text !== 'string' || text.length > 100000) return {ok:false,error:'输入过长。'};
+  let ownLock=false;
   try {
-    if(text.trim()&&state.directReady){
-      if(!chatClient){chatClient=new ChatClient(findCLI(settings,state.appPath),{directory:path.join(app.getPath('userData'),'conversation')});chatClient.on('change',value=>{state.chatState=value;clearTimeout(chatBroadcastTimer);chatBroadcastTimer=setTimeout(broadcast,25);});}
-      return await chatClient.send(text,settings.chatModel||undefined);
+    if(attachmentsLocked||attachments.pendingCount)return{ok:false,error:'附件正在读取或消息正在提交，请稍候。'};
+    const selected=attachments.resolve(ids);
+    if(QA){
+      if(!process.argv.includes('--qa-attachments'))return{ok:false,error:'预览模式不发送消息。'};
+      if(!state.directReady)return{ok:false,error:'附件尚未发送。请连接直发，或在官方 Chat 中手动添加。'};
+      qaLastSubmission={simulated:true,text,names:selected.map(a=>a.name),input:turnInput(text,selected).map(i=>({type:i.type,...(i.type==='text'?{text:i.text}:{dataURL:i.url.startsWith('data:image/')})}))};
+      attachments.removeMany(ids);attachmentUpdate();return{ok:true,direct:true};
     }
+    if((text.trim()||selected.length)&&state.directReady){
+      attachmentsLocked=true;ownLock=true;
+      if(!chatClient){chatClient=new ChatClient(findCLI(settings,state.appPath),{directory:path.join(app.getPath('userData'),'conversation')});chatClient.on('change',value=>{state.chatState=value;clearTimeout(chatBroadcastTimer);chatBroadcastTimer=setTimeout(broadcast,25);});}
+      const result=await chatClient.send(text,settings.chatModel||undefined,selected);
+      if(result.ok&&result.direct){attachments.removeMany(ids);attachmentUpdate();}return result;
+    }
+    if(selected.length){await openOfficialApp(settings,state,shell);setTimeout(watchApp,1500);return{ok:false,error:'附件尚未发送。请连接直发，或在官方 Chat 中手动添加。'};}
     // The user explicitly selected clipboard handoff; nothing is automatically pasted or sent.
     if (text.trim()) clipboard.writeText(text);
     await openOfficialApp(settings,state,shell);
     setTimeout(watchApp,1500);
     return {ok:true,copied:!!text.trim()};
-  } catch(e) {return {ok:false,copied:!!text.trim(),error:e.message};}
+  } catch(e) {return {ok:false,error:e.message};}
+  finally{if(ownLock)attachmentsLocked=false;}
 }
 function verifySender(event) {return win && event.sender === win.webContents && event.senderFrame === win.webContents.mainFrame;}
 function setupIPC() {
-  ipcMain.handle('ready', e=>{if (!verifySender(e))return;return {...state,settings,platform:process.platform};});
+  ipcMain.handle('ready', e=>{if (!verifySender(e))return;return {...state,settings,platform:process.platform,attachments:attachments.snapshot()};});
+  ipcMain.handle('attachments:pick',e=>verifySender(e)?pickAttachments():{ok:false});
+  ipcMain.handle('attachments:add',async(e,value)=>{if(!verifySender(e))return{ok:false};if(attachmentsLocked)return attachmentUpdate('正在提交消息，请稍候。');try{await attachments.addBuffer(value);return attachmentUpdate();}catch(error){return attachmentUpdate(attachmentError(error));}});
+  ipcMain.handle('attachments:remove',(e,id)=>{if(!verifySender(e)||attachmentsLocked||typeof id!=='string')return{ok:false};attachments.remove(id);return attachmentUpdate();});
   ipcMain.handle('refresh', async e=>{if(verifySender(e))await refresh();});
   ipcMain.handle('chat', (e,text)=>verifySender(e)?openChat(text):{ok:false});
   ipcMain.handle('cancel',async e=>{if(verifySender(e))await chatClient?.cancel();});
   ipcMain.on('chat-collapse',(e,value)=>{if(verifySender(e)&&typeof value==='boolean')setSetting('chatCollapsed',value);});
   ipcMain.on('visibility',(e,value)=>{if(!verifySender(e)||typeof value!=='object')return;const next={bubble:!!value.bubble,messages:!!value.messages};if(next.bubble!==visibility.bubble||next.messages!==visibility.messages){visibility=next;broadcast();}});
-  ipcMain.on('composer-height',(e,value)=>{if(verifySender(e)&&Number.isFinite(value)){const next=Math.max(40,Math.min(76,value));if(next!==composerHeight){composerHeight=next;broadcast();}}});
+  ipcMain.on('composer-height',(e,value)=>{if(verifySender(e)&&Number.isFinite(value)){const next=Math.max(40,Math.min(140,value));if(next!==composerHeight){composerHeight=next;broadcast();}}});
   ipcMain.on('regions',(e,value)=>{if(verifySender(e)&&Array.isArray(value))regions=value.slice(0,16).filter(r=>[r.x,r.y,r.width,r.height].every(Number.isFinite));});
   ipcMain.on('menu',e=>{if(verifySender(e)){win.setIgnoreMouseEvents(false);ignore=false;makeMenu().popup({window:win});}});
   ipcMain.on('command',(e,action)=>{if(!verifySender(e))return;if(action==='hide'){hidden=true;win.hide();}else if(action==='menu')makeMenu().popup({window:win});});
@@ -204,7 +249,7 @@ function tickCursor() {
   if (ignore===interactive) {ignore=!interactive;win.setIgnoreMouseEvents(ignore,{forward:true});}
   win.webContents.send('cursor',{...local,focused:win.isFocused(),drag:motion});
 }
-async function runQA(){await require(process.argv.includes('--qa-language-motion')?'./qa-language-motion.cjs':process.argv.includes('--qa-compact')?'./qa-compact.cjs':'./qa-runner.cjs').run({win,screen,state,settings,broadcast,chooseLanguage:l=>setSetting('language',l),settingsFile,menuSnapshot:()=>{const walk=items=>items.map(i=>({label:i.label,checked:i.checked,submenu:i.submenu?walk(i.submenu.items):undefined}));return walk(makeMenu().items);},anchor:()=>anchor,setAnchor:p=>{anchor=p;broadcast();},qaOutput});app.quit();}
+async function runQA(){await require(process.argv.includes('--qa-attachments')?'./qa-attachments.cjs':process.argv.includes('--qa-language-motion')?'./qa-language-motion.cjs':process.argv.includes('--qa-compact')?'./qa-compact.cjs':'./qa-runner.cjs').run({win,screen,state,settings,broadcast,chooseLanguage:l=>setSetting('language',l),settingsFile,menuSnapshot:()=>{const walk=items=>items.map(i=>({label:i.label,checked:i.checked,submenu:i.submenu?walk(i.submenu.items):undefined}));return walk(makeMenu().items);},attachments,attachmentUpdate,readQASubmission:()=>qaLastSubmission,anchor:()=>anchor,setAnchor:p=>{anchor=p;broadcast();},qaOutput});app.quit();}
 async function runSmoke(){
  const wait=ms=>new Promise(r=>setTimeout(r,ms));const start=Date.now();
  const helper=require('node:child_process').spawn(process.execPath,[...(app.isPackaged?[]:[path.join(__dirname,'..')]),'--bridge-mcp'],{stdio:['pipe','pipe','ignore'],windowsHide:true,env:{...process.env,...(bridgeFile?{SHADOWCYRENE_BRIDGE_FILE:bridgeFile}:{})}});
@@ -261,7 +306,7 @@ else {
 }
 app.on('before-quit',event=>{
   if(quitting)return;event.preventDefault();quitting=true;
-  clearTimeout(chatBroadcastTimer);clearInterval(cursorTimer);clearInterval(statusTimer);clearInterval(refreshTimer);clearTimeout(saving);disconnect();globalShortcut.unregisterAll();tray?.destroy();
+  clearTimeout(chatBroadcastTimer);clearInterval(cursorTimer);clearInterval(statusTimer);clearInterval(refreshTimer);clearTimeout(saving);disconnect();attachments.clear();stopDocumentReaders();globalShortcut.unregisterAll();tray?.destroy();
   if(settings&&settingsFile&&!QA&&!SMOKE)try{settings.petAnchor=anchor;fs.mkdirSync(path.dirname(settingsFile),{recursive:true});fs.writeFileSync(settingsFile,JSON.stringify(settings,null,2),{mode:0o600});}catch{}
   Promise.allSettled([presence?.stop(),chatClient?.stop()]).then(()=>app.quit());
 });

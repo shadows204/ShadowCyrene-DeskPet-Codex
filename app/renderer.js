@@ -10,6 +10,7 @@ let imageReady=false,current='0:0',previous=current,transitionAt=0,nextBlink=per
 let messageTimer,pressed=false,pressPoint=null,gestureMoved=false,frames=[],lastFrameTime=0,lastQuotaStamp='',puppet;
 let head={x:0,y:0},eyes={x:0,y:0},bubbleUntil=0,bubbleTimer;
 let face={x:294,y:122,scale:1},lastMessageStamp='',lastVisibility='',submitting=false;
+let pendingAttachments=[],attachmentAdding=0,composerRowHeight=40;
 let notice='',noticeIsPaste=false,focusAfterExpand=false;
 let runPose=dragRunPose(),lastLocale='';
 atlas.onload=()=>{try{puppet=new window.ShadowCyrenePuppet(pet,atlas);imageReady=true;}catch(e){showMessage(e.message);}};
@@ -78,7 +79,7 @@ function applyLocale(){
   const lang=locale();if(lang===lastLocale)return;lastLocale=lang;document.documentElement.lang=lang;document.title=T('ShadowCyrene');
   const text={ 'message-title':'ShadowCyrene · 对话','qa-label':'预览数据 · 非真实额度'};
   for(const[id,key]of Object.entries(text))$(id).textContent=T(key);
-  const labels={stage:'ShadowCyrene桌面宠物',pet:'ShadowCyrene：拖动移动，右键打开菜单，双击挥手',quota:'Codex 与 Work 剩余额度',messages:'桌宠对话内容',composer:'Chat 输入栏',options:'更多选项','collapse-chat':'收起 Chat','chat-orb':'展开 Chat',refresh:'刷新额度'};
+  const labels={stage:'ShadowCyrene桌面宠物',pet:'ShadowCyrene：拖动移动，右键打开菜单，双击挥手',quota:'Codex 与 Work 剩余额度',messages:'桌宠对话内容',composer:'Chat 输入栏',options:'添加文件或图片…','attachment-list':'待发送附件','collapse-chat':'收起 Chat','chat-orb':'展开 Chat',refresh:'刷新额度'};
   for(const[id,key]of Object.entries(labels)){$(id).setAttribute('aria-label',T(key));if(['options','collapse-chat','chat-orb','refresh'].includes(id))$(id).title=T(key);}
   $('prompt').placeholder=T('想聊些什么？');
 }
@@ -86,6 +87,7 @@ function applyState(value){
   state={...state,...value};document.body.dataset.theme=state.theme||'light';document.body.dataset.reduced=String(!!state.settings.reducedMotion);
   applyLocale();
   updateBubble();$('composer').hidden=!state.settings.chat||!!state.settings.chatCollapsed;$('chat-orb').hidden=!state.settings.chat||!state.settings.chatCollapsed;
+  if(Array.isArray(value.attachments))pendingAttachments=value.attachments;renderAttachments();
   renderQuota();renderMessages();applyLayout();updateChatMode();updateHint();
   requestAnimationFrame(()=>{reportRegions();if(focusAfterExpand&&!$('composer').hidden){focusAfterExpand=false;$('prompt').focus();}});
 }
@@ -109,6 +111,34 @@ function updateChatMode(){
   $('handoff').querySelector('path').setAttribute('d',busy?'M7 7h10v10H7z':state.directReady?'M12 19V5M6 11l6-6 6 6':'M7 17 17 7M7 7h10v10');
   $('composer').title=T(state.directReady?'配套插件已连接 · Codex/Work直发':'未连接配套插件 · 复制并打开官方 Chat');
   $('prompt').setAttribute('aria-label',T(state.directReady?'发送到桌宠专属会话':'输入后复制文字并打开官方 Chat'));
+  $('options').disabled=submitting||attachmentAdding>0;$('handoff').disabled=submitting||attachmentAdding>0&&!busy;
+}
+function sizeComposer(){
+  if(!$('composer').hidden){$('prompt').style.height='22px';$('prompt').style.height=Math.min(60,$('prompt').scrollHeight)+'px';composerRowHeight=Math.max(40,Math.min(76,$('prompt').scrollHeight+8));}
+  const height=composerRowHeight+(pendingAttachments.length?64:0);$('composer').style.height=`${height}px`;window.companion.composerHeight(height);requestAnimationFrame(reportRegions);
+}
+function renderAttachments(){
+  const list=$('attachment-list');list.replaceChildren();list.hidden=!pendingAttachments.length;
+  for(const attachment of pendingAttachments){
+    const chip=document.createElement('div');chip.className='attachment-chip';chip.setAttribute('role','listitem');chip.dataset.id=attachment.id;
+    if(attachment.preview){const image=document.createElement('img');image.src=attachment.preview;image.alt=attachment.name;chip.append(image);}
+    else{const symbol=document.createElement('span');symbol.className='attachment-symbol';symbol.textContent=attachment.kind==='text'?'TXT':attachment.kind.toUpperCase();chip.append(symbol);}
+    const info=document.createElement('span');info.className='attachment-info';const name=document.createElement('span');name.className='attachment-name';name.textContent=attachment.name;
+    const kind=document.createElement('span');kind.className='attachment-kind';const type=attachment.kind==='image'?T('图片'):['pdf','docx'].includes(attachment.kind)?T('仅正文'):T('文本');kind.textContent=`${type} · ${Math.max(1,Math.round(attachment.bytes/1024))} KB`;
+    info.append(name,kind);chip.title=`${attachment.name}\n${T('待发送附件')} · ${kind.textContent}`;chip.append(info);
+    const remove=document.createElement('button');remove.type='button';remove.className='attachment-remove';remove.textContent='×';remove.title=T('移除附件：{name}',{name:attachment.name});remove.setAttribute('aria-label',remove.title);remove.disabled=submitting;
+    remove.addEventListener('click',async()=>{const result=await window.companion.removeAttachment(attachment.id);if(result?.error)showMessage(result.error);});chip.append(remove);list.append(chip);
+  }
+  sizeComposer();
+}
+async function importFiles(files){
+  if(submitting)return;attachmentAdding++;updateChatMode();
+  try{for(const file of files){
+    if(file.size>10*1024*1024){showMessage('单个附件不能超过10MB。');continue;}
+    const result=await window.companion.addAttachment({name:file.name||'pasted-image.png',bytes:new Uint8Array(await file.arrayBuffer())});
+    if(result.error)showMessage(result.error);else if(/\.(pdf|docx)$/i.test(file.name))showMessage('PDF 和 DOCX 仅发送正文，不包含内嵌图片或原排版。');
+  }}catch{showMessage('无法添加附件，请检查文件是否可读。');}
+  finally{attachmentAdding--;updateChatMode();$('prompt').focus();}
 }
 function renderMessages(){
   const chat=state.chatState||{},entries=(chat.messages||[]).filter(m=>m.text),mode=state.settings.messageMode||'single';
@@ -156,24 +186,31 @@ pet.addEventListener('lostpointercapture',()=>{if(pressed){pressed=false;window.
 pet.addEventListener('dblclick',()=>{animation={row:3,start:performance.now()};});
 pet.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showQuota();}if(e.key==='ContextMenu')window.companion.menu();});
 document.addEventListener('contextmenu',e=>{if(e.target!==$('prompt')){e.preventDefault();window.companion.menu();}});
-$('options').addEventListener('click',()=>window.companion.menu());
+$('options').addEventListener('click',async()=>{const result=await window.companion.pickAttachments();if(result?.error)showMessage(result.error);});
 $('refresh').addEventListener('click',()=>window.companion.refresh());
 $('collapse-chat').addEventListener('click',()=>{$('prompt').blur();window.companion.collapseChat(true);});
 $('chat-orb').addEventListener('click',()=>{focusAfterExpand=true;window.companion.collapseChat(false);});
 async function submit(){
+  if(submitting||attachmentAdding){if(attachmentAdding)showMessage('附件正在读取或消息正在提交，请稍候。');return;}
   if(state.chatState?.busy||submitting){await window.companion.cancel();return;}
   const text=$('prompt').value;
   submitting=true;updateChatMode();
-  const result=await window.companion.openChat(text);submitting=false;updateChatMode();
+  let result;try{result=await window.companion.openChat({text,attachmentIds:pendingAttachments.map(a=>a.id)});}catch{result={ok:false,error:'聊天连接失败，草稿未发送，请检查连接后重试。'};}finally{submitting=false;updateChatMode();}
   if(result.ok&&result.direct){$('prompt').value='';$('prompt').dispatchEvent(new Event('input'));}
   else showMessage(result.ok?(result.copied?'已复制，请在官方 Chat 粘贴发送':'已请求打开官方 Chat'):result.error||'暂时无法打开官方应用',!!(result.ok&&result.copied));
   // Keep the draft so a failed launch never loses the user's text.
 }
 $('composer').addEventListener('submit',e=>{e.preventDefault();submit();});
 $('prompt').addEventListener('keydown',e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();submit();}if(e.key==='Escape')$('prompt').blur();});
-$('prompt').addEventListener('input',()=>{$('prompt').style.height='22px';$('prompt').style.height=Math.min(60,$('prompt').scrollHeight)+'px';window.companion.composerHeight(Math.max(40,Math.min(76,$('prompt').scrollHeight+8)));requestAnimationFrame(reportRegions);});
+$('prompt').addEventListener('input',sizeComposer);
+$('prompt').addEventListener('paste',e=>{const files=[...(e.clipboardData?.files||[])];if(!files.length)return;e.preventDefault();const text=e.clipboardData.getData('text/plain');if(text){$('prompt').setRangeText(text,$('prompt').selectionStart,$('prompt').selectionEnd,'end');$('prompt').dispatchEvent(new Event('input'));}importFiles(files);});
+$('composer').addEventListener('dragover',e=>{if(e.dataTransfer?.types.includes('Files')){e.preventDefault();$('composer').dataset.dragover='true';}});
+$('composer').addEventListener('dragleave',()=>delete $('composer').dataset.dragover);
+$('composer').addEventListener('drop',e=>{e.preventDefault();delete $('composer').dataset.dragover;const files=[...(e.dataTransfer?.files||[])];if(files.length)importFiles(files);});
+document.addEventListener('dragover',e=>e.preventDefault());document.addEventListener('drop',e=>e.preventDefault());
 document.addEventListener('keydown',e=>{if(e.key==='Escape'&&e.target!==$('prompt'))window.companion.action('hide');});
 window.companion.onState(applyState);
+window.companion.onAttachments(value=>{pendingAttachments=value;renderAttachments();});
 window.companion.onLayout(value=>{state.layout=value;applyLayout();reportRegions();});
 window.companion.onCursor(value=>{cursor=value;});
 window.companion.onAction(action=>{if(action==='focus'&&!$('composer').hidden)$('prompt').focus();if(action==='blur'&&pressed){pressed=false;window.companion.drag('end');}if(action==='drag-start'){animation=null;runPose=dragRunPose();cursor.drag={active:true,vx:0,vy:0};}if(action==='drag-end'){cursor.drag={active:false};runPose=dragRunPose(runPose,{active:false});}if(action?.animation)animation={row:action.animation,start:performance.now()};});
@@ -181,6 +218,7 @@ window.companion.ready().then(applyState);requestAnimationFrame(render);setInter
 new ResizeObserver(reportRegions).observe($('composer'));
 window.addEventListener('resize',applyLayout);
 window.shadowcyreneQA={configure:applyState,ready:()=>imageReady,showBubble:showQuota,direction:()=>direction,pose:()=>({head,eyes}),
+  attachments:()=>pendingAttachments.map(a=>({id:a.id,name:a.name,kind:a.kind})),adding:()=>attachmentAdding,submit,
   drag:(active,vx=0,vy=0)=>{cursor.drag={active,vx,vy};},runPose:()=>({...runPose,key:current}),
   cursor:(x,y)=>{cursor={x,y,focused:false};},
   resetBubble:()=>{clearTimeout(bubbleTimer);bubbleUntil=0;updateBubble();reportRegions();},

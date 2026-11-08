@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>ShadowCyrene</title>
   <link rel="stylesheet" href="styles.css">
@@ -21,7 +21,9 @@
       <div id="message-scroll"><div id="message-content" role="log" aria-live="polite"></div></div>
     </section>
     <form id="composer" aria-label="Chat 输入栏">
-      <button type="button" class="icon menu-icon" id="options" title="更多选项" aria-label="更多选项">
+      <div id="attachment-list" role="list" aria-label="待发送附件" hidden></div>
+      <div id="composer-row">
+      <button type="button" class="icon" id="options" title="添加文件或图片…" aria-label="添加文件或图片…">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
       </button>
       <textarea id="prompt" rows="1" placeholder="Ask anything" aria-label="输入后复制文字并打开官方 Chat" spellcheck="false"></textarea>
@@ -31,6 +33,7 @@
       <button type="submit" class="icon" id="handoff" title="复制文字并打开官方 Chat，粘贴后发送" aria-label="复制文字并打开官方 Chat">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
       </button>
+      </div>
     </form>
     <button type="button" id="chat-orb" hidden title="展开 Chat" aria-label="展开 Chat">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-3 2v-7a8 8 0 1 1 18-3Z"/><path d="M7 11h.01M11 11h.01M15 11h.01"/></svg>

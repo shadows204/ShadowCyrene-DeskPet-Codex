@@ -1,6 +1,6 @@
 {
   "name": "shadowcyrene-deskpet-codex",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": true,
   "description": "ShadowCyrene desktop companion for macOS and Windows",
   "author": "shadows204",
@@ -62,5 +62,9 @@
   "homepage": "https://github.com/shadows204/ShadowCyrene-DeskPet-Codex",
   "bugs": {
     "url": "https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/issues"
+  },
+  "dependencies": {
+    "mammoth": "1.13.0",
+    "unpdf": "2.1.0"
   }
 }

@@ -13,7 +13,9 @@ for(const [name,relative]of targets){
     const matches=expected===actual;result.files.push({file,sha256:actual,matches});result.ok&&=matches;
   }
   const names=asar.listPackage(archive);
-  result.noAccountFiles=!names.some(n=>/auth\.json|settings\.json|private|electron-data|node_modules/.test(n));
+  result.noAccountFiles=!names.some(n=>/(^|\/)(auth|settings|bridge|session)\.json$|(^|\/)(qa|electron-data|electron-qa-data|electron-smoke-data|\.git)\//.test(n));
+  result.documentReadersIncluded=names.some(n=>n.includes('/node_modules/unpdf/'))&&names.some(n=>n.includes('/node_modules/mammoth/'));
+  result.ok&&=result.documentReadersIncluded;
   result.ok&&=result.noAccountFiles;report.targets.push(result);
 }
 const resedit=require('resedit');

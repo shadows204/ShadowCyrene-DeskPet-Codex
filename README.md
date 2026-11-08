@@ -21,13 +21,13 @@
 
 ## 安装
 
-从 [Releases](https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/releases/latest) 下载 **0.4.0** 对应的 ZIP：
+从 [Releases](https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/releases/latest) 下载 **0.5.0** 对应的 ZIP：
 
 | 系统 | 文件 | 使用方式 |
 | --- | --- | --- |
-| macOS · Apple Silicon | `ShadowCyrene-0.4.0-macOS-arm64.zip` | 解压，将 `ShadowCyrene.app` 拖至应用程序目录 |
-| macOS · Intel | `ShadowCyrene-0.4.0-macOS-x64.zip` | 同上 |
-| Windows 10/11 · x64 | `ShadowCyrene-0.4.0-Windows-x64.zip` | 完整解压，运行 `ShadowCyrene.exe`，不要单独移动 EXE |
+| macOS · Apple Silicon | `ShadowCyrene-0.5.0-macOS-arm64.zip` | 解压，将 `ShadowCyrene.app` 拖至应用程序目录 |
+| macOS · Intel | `ShadowCyrene-0.5.0-macOS-x64.zip` | 同上 |
+| Windows 10/11 · x64 | `ShadowCyrene-0.5.0-Windows-x64.zip` | 完整解压，运行 `ShadowCyrene.exe`，不要单独移动 EXE |
 
 macOS 在 Apple Silicon 本机测试。Intel Mac 与 Windows x64 完成构建、架构、图标资源和包内容核对，尚未真机验证；暂未提供 Windows ARM 原生包。
 
@@ -40,8 +40,10 @@ macOS 在 Apple Silicon 本机测试。Intel Mac 与 Windows x64 完成构建、
 | 拖动人物 | 移动并播放对应方向的跑步动画 |
 | 单击人物 | 显示额度气泡 3 秒；拖动不会误触 |
 | 双击人物 | 挥手 |
-| 右键人物／Chat 加号 | 打开菜单、语言、缩放和连接设置 |
+| 右键人物／托盘图标 | 打开菜单、语言、缩放和连接设置 |
 | Option + Space / Alt + Space | macOS / Windows 唤出并聚焦 Chat；冲突时回退至加 Shift 的组合 |
+| Chat ＋号 | 添加文件或图片 |
+| 在输入框粘贴／拖放文件至 Chat | 添加图片或文件附件 |
 | Chat 下箭头／圆钮 | 收起／展开，草稿保留 |
 | Enter / Shift + Enter | 发送／换行 |
 | Esc | 隐藏桌宠 |
@@ -67,11 +69,24 @@ Windows 即使展开 Chat 也不占任务栏；最小化或关闭窗口会隐藏
 
 直接聊天会消耗对应订阅额度。它是**同账户的桌宠专属 Codex/Work 会话**，不接管官方当前聊天，不向官方输入框自动粘贴，也不是普通 ChatGPT 各模型的聊天额度。
 
-未连接时，输入内容复制到剪贴板并打开官方 Chat，由你粘贴发送。附件、语音等功能仍在官方应用内使用。Chat 栏独立重建，未复用官方私有界面代码或材质。
+未连接时，输入内容复制到剪贴板并打开官方 Chat，由你粘贴发送。语音等功能仍在官方应用内使用。Chat 栏独立重建，未复用官方私有界面代码或材质。
 
 检测插件仅提供 `companion_status` 在线检测，不读取聊天，也没有自动发送工具。连接只监听本机，使用随机令牌；令牌不写入插件包。插件复用桌宠自身程序，不需另外安装 Node。
 
 **每台机器从桌宠内安装一次检测插件**，以记录正确的程序路径。移动 Windows 文件夹后请重新安装／更新。替换 Windows EXE 前请退出桌宠及加载插件的官方会话，避免文件被占用。更名后的旧用户需要重新安装新名称的插件；旧偏好与专属会话引用会自动迁移，旧版数据保留。
+
+## 文件和图片附件
+
+点击 Chat **＋** 选择文件，或直接在输入框粘贴剪贴板图片，也可把文件拖到 Chat 栏。选择后先显示带缩略图或文件名的**待发送附件**，可逐个移除；不会在选择时上传。收起、展开和发送失败均保留附件与草稿。
+
+- **图片**：PNG、JPEG、WebP，以及转换为静态图片的 GIF/BMP；通过真正的图片输入发送，模型可看图。动态图片只使用静态帧。
+- **文档**：PDF、DOCX 在本地提取正文后发送，**不包含内嵌图片、表格的原始版面或排版**。没有正文的扫描件会提示改用图片，不会假装已读取。
+- **文本与代码**：TXT、Markdown、CSV、JSON、YAML 及常见代码文件，支持 UTF-8 和带 BOM 的 UTF-16。不执行附件中的代码。
+- 每条消息最多 **6 个附件**，每个 **10 MB**，合计 **20 MB**；PDF 最多 100 页，单文件正文最多 80,000 字符。超限会明确提示，不静默截断。
+- 附件需要直发连接才能在桌宠内发送；未连接时保留附件，并请求打开官方 Chat 让你手动添加。文件不会被错误地当成一个路径或文件名来“发送”。
+- 新附件和预览仅保存在内存中；退出清除本机待发送附件。发送后内容属于官方专属会话，遵循相应服务的数据规则。
+
+![ShadowCyrene attachment draft preview](docs/chat-attachments.png)
 
 ## 额度与隐私
 
@@ -96,6 +111,7 @@ npm start
 ```sh
 npm run icons      # 从现有素材编译 macOS、Windows 和托盘图标
 npm run qa -- --qa-language-motion
+npm run qa -- --qa-attachments
 npm run dist:mac   # macOS arm64 + x64；在 macOS 上运行
 npm run dist:win   # Windows x64
 node scripts/verify-release.cjs

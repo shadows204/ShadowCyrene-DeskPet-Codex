@@ -1,6 +1,7 @@
 'use strict';
 const {EventEmitter}=require('node:events'),fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto');
 const {QuotaClient,METHODS}=require('./quota-client.cjs');
+const {turnInput}=require('./attachments.cjs');
 const CHAT_METHODS=new Set([...METHODS,'config/read','mcpServerStatus/list','model/list','thread/start','thread/resume','turn/start','turn/interrupt']);
 function conversationConfig(config={}){
   const result={'features.shell_tool':false,'features.unified_exec':false,'features.apps':false,'features.plugins':false,'features.hooks':false,'web_search':'disabled'};
@@ -41,9 +42,10 @@ class ChatClient extends EventEmitter{
     this.threadLoaded=true;
     fs.writeFileSync(path.join(this.directory,'session.json'),JSON.stringify({threadId:this.threadId,fingerprint:this.fingerprint}),{mode:0o600});
   }
-  async send(text,model){
+  async send(text,model,attachments=[]){
     if(this.busy)return {ok:false,error:'正在回复，请等待或先停止。'};
-    if(!text.trim())return {ok:false,error:'请输入消息。'};
+    if(!text.trim()&&!attachments.length)return {ok:false,error:'请输入消息。'};
+    const input=turnInput(text,attachments);
     this.busy=true;this.error='';this.cancelRequested=false;this.update();
     let didSubmit=false;
     try{
@@ -53,11 +55,12 @@ class ChatClient extends EventEmitter{
       if(!this.threadLoaded||!this.threadId||this.loadedModel!==model){await this.ensureThread(model);this.loadedModel=model;}
       if(this.cancelRequested){this.busy=false;this.update();return {ok:false,error:'已取消发送。'};}
       const localId=crypto.randomUUID();
-      this.messages.push({id:localId,role:'user',text},{id:localId+'-reply',role:'assistant',text:''});
+      const display=[text,...attachments.map(a=>'📎 '+a.name)].filter(Boolean).join('\n');
+      this.messages.push({id:localId,role:'user',text:display},{id:localId+'-reply',role:'assistant',text:''});
       this.messages=this.messages.slice(-60);
       this.turn={localId,threadId:this.threadId,id:null,items:new Map(),finished:false};this.update();
       didSubmit=true;
-      const result=await this.rpc.call('turn/start',{threadId:this.threadId,clientUserMessageId:localId,input:[{type:'text',text}],approvalPolicy:'never',
+      const result=await this.rpc.call('turn/start',{threadId:this.threadId,clientUserMessageId:localId,input,approvalPolicy:'never',
         sandboxPolicy:{type:'readOnly',networkAccess:false},...(model?{model}:{})});
       if(this.turn&&!this.turn.finished)this.turn.id=result.turn?.id;
       if(this.cancelRequested)await this.cancel();

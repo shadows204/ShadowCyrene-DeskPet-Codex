@@ -30,7 +30,19 @@ body[data-theme="dark"] #quota { background:rgba(58,36,49,.98); color:#f2c5da; b
 body[data-theme="dark"] #quota::before { background:#3a2431; border-color:#aa698b; }
 body[data-theme="dark"] .reset { color:#c89db3; }
 /* Rebuilt from the installed Quick Chat material's 40px/20px/12px geometry. */
-#composer { position:absolute; left:140px; top:290px; width:320px; min-height:40px; max-height:76px; padding:3px 7px; border-radius:20px; background:var(--surface); color:var(--text); border:1px solid var(--border); display:flex; align-items:center; gap:12px; box-shadow:0 2px 9px #00000014,0 10px 25px #0000000a; }
+#composer { position:absolute; left:140px; top:290px; width:320px; min-height:40px; max-height:140px; padding:3px 7px; border-radius:20px; background:var(--surface); color:var(--text); border:1px solid var(--border); display:flex; flex-direction:column; box-shadow:0 2px 9px #00000014,0 10px 25px #0000000a; }
+#composer-row { display:flex; align-items:center; gap:12px; width:100%; min-height:32px; flex:1; }
+#attachment-list { display:flex; align-items:center; gap:6px; height:60px; margin-bottom:4px; width:100%; flex:0 0 60px; overflow-x:auto; overflow-y:hidden; scrollbar-width:thin; padding:4px 3px; }
+.attachment-chip { display:flex; align-items:center; gap:6px; height:46px; width:170px; flex:0 0 170px; padding:3px 5px; border:1px solid var(--border); border-radius:10px; background:var(--hover); }
+.attachment-chip img { width:36px; height:36px; object-fit:contain; border-radius:5px; flex:0 0 36px; }
+.attachment-symbol { display:flex; align-items:center; justify-content:center; width:32px; height:36px; flex:0 0 32px; border-radius:5px; background:#dc92b526; color:#bd6294; font-size:9px; font-weight:600; }
+.attachment-info { flex:1; min-width:0; }
+.attachment-name { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; font-size:10px; line-height:15px; }
+.attachment-kind { display:block; color:var(--muted); font-size:9px; line-height:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.attachment-remove { flex:0 0 19px; width:19px; height:23px; padding:0; border:0; border-radius:6px; background:transparent; color:var(--muted); font-size:17px; }
+.attachment-remove:hover { background:var(--hover); }
+button:disabled { opacity:.45; cursor:default; }
+#composer[data-dragover="true"] { outline:2px solid #cf83ad; outline-offset:2px; }
 .icon { display:flex; align-items:center; justify-content:center; width:30px; height:30px; flex:0 0 30px; border:0; padding:5px; border-radius:50%; color:var(--text); background:transparent; }
 .icon:hover { background:var(--hover); }
 .icon svg { width:20px; height:20px; stroke:currentColor; stroke-width:1.65; fill:none; stroke-linecap:round; stroke-linejoin:round; }
