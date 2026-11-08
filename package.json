@@ -1,0 +1,66 @@
+{
+  "name": "shadowcyrene-deskpet-codex",
+  "version": "0.4.0",
+  "private": true,
+  "description": "ShadowCyrene desktop companion for macOS and Windows",
+  "author": "shadows204",
+  "main": "app/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test Tests/*.test.cjs",
+    "probe": "node scripts/probe.cjs",
+    "qa": "electron . --qa",
+    "dist:mac": "electron-builder --mac zip --arm64 --x64 --publish never",
+    "dist:win": "electron-builder --win zip --x64 --publish never",
+    "icons": "electron scripts/build-icons.cjs"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "io.github.shadows204.shadowcyrene",
+    "productName": "ShadowCyrene",
+    "copyright": "Personal fan companion; not affiliated with OpenAI or HoYoverse",
+    "asar": true,
+    "directories": {
+      "output": "dist",
+      "buildResources": "Resources"
+    },
+    "files": [
+      "app/**/*",
+      "Resources/atlas.png",
+      "Resources/icon.*",
+      "Resources/tray*.png",
+      "package.json",
+      "README.md",
+      "LICENSE-NOTICE.md"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "identity": null,
+      "hardenedRuntime": false,
+      "icon": "Resources/icon.icns",
+      "extendInfo": {
+        "LSUIElement": true
+      },
+      "artifactName": "ShadowCyrene-${version}-macOS-${arch}.zip"
+    },
+    "win": {
+      "target": [
+        "zip"
+      ],
+      "icon": "Resources/icon.ico",
+      "artifactName": "ShadowCyrene-${version}-Windows-${arch}.zip",
+      "signExecutable": false
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shadows204/ShadowCyrene-DeskPet-Codex.git"
+  },
+  "homepage": "https://github.com/shadows204/ShadowCyrene-DeskPet-Codex",
+  "bugs": {
+    "url": "https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/issues"
+  }
+}

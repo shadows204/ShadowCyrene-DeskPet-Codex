@@ -1,0 +1,15 @@
+node_modules
+dist/
+qa/
+.DS_Store
+*.log
+.env*
+!.env.example
+auth.json
+settings.json
+bridge.json
+session.json
+*.pem
+*.key
+*.p12
+*.mobileprovision

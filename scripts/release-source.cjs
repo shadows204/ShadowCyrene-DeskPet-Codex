@@ -1,0 +1,14 @@
+'use strict';
+const fs=require('node:fs'),path=require('node:path'),crypto=require('node:crypto'),{execFileSync}=require('node:child_process');
+const root=path.resolve(__dirname,'..'),dist=path.join(root,'dist'),version=require('../package.json').version;
+const git=(...args)=>execFileSync('git',args,{cwd:root,encoding:'utf8'});
+if(git('status','--porcelain').trim())throw Error('Commit the reviewed source before generating its archive.');
+fs.mkdirSync(dist,{recursive:true});
+const source=`ShadowCyrene-${version}-source.zip`;
+git('archive','--format=zip',`--prefix=ShadowCyrene-DeskPet-Codex-${version}/`,`--output=${path.join(dist,source)}`,'HEAD');
+const artifacts=fs.readdirSync(dist).filter(n=>n.startsWith(`ShadowCyrene-${version}-`)&&n.endsWith('.zip')).sort().map(file=>{const data=fs.readFileSync(path.join(dist,file));return{file,bytes:data.length,sha256:crypto.createHash('sha256').update(data).digest('hex')};});
+for(const suffix of ['macOS-arm64','macOS-x64','Windows-x64','source'])if(!artifacts.some(a=>a.file===`ShadowCyrene-${version}-${suffix}.zip`))throw Error(`Missing ${suffix} artifact`);
+const manifest={version,commit:git('rev-parse','HEAD').trim(),artifacts,macOSArm64RuntimeTested:true,macOSIntelRuntimeTested:false,windowsRuntimeTested:false};
+fs.writeFileSync(path.join(dist,'release-manifest.json'),JSON.stringify(manifest,null,2)+'\n');
+fs.writeFileSync(path.join(dist,'SHA256SUMS.txt'),artifacts.map(a=>`${a.sha256}  ${a.file}\n`).join(''));
+console.log(JSON.stringify(manifest,null,2));

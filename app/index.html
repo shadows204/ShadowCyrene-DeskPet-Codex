@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ShadowCyrene</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main id="stage" aria-label="ShadowCyrene桌面宠物">
+    <canvas id="pet" width="384" height="416" tabindex="0" role="button" aria-label="ShadowCyrene：拖动移动，右键打开菜单，双击挥手"></canvas>
+    <section id="quota" aria-label="Codex 与 Work 剩余额度">
+      <header><span class="quota-title">Codex / Work</span><span id="plan">未连接</span></header>
+      <div id="quota-lines"></div>
+      <footer><span id="status" role="status">等待连接</span><button id="refresh" title="刷新额度" aria-label="刷新额度">↻</button></footer>
+      <div id="qa-label" hidden>预览数据 · 非真实额度</div>
+    </section>
+    <section id="messages" hidden aria-label="桌宠对话内容">
+      <header><span id="message-title">ShadowCyrene · 对话</span><span id="chat-status">桌宠专属会话</span></header>
+      <div id="message-scroll"><div id="message-content" role="log" aria-live="polite"></div></div>
+    </section>
+    <form id="composer" aria-label="Chat 输入栏">
+      <button type="button" class="icon menu-icon" id="options" title="更多选项" aria-label="更多选项">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+      <textarea id="prompt" rows="1" placeholder="Ask anything" aria-label="输入后复制文字并打开官方 Chat" spellcheck="false"></textarea>
+      <button type="button" class="icon" id="collapse-chat" title="收起 Chat" aria-label="收起 Chat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"/></svg>
+      </button>
+      <button type="submit" class="icon" id="handoff" title="复制文字并打开官方 Chat，粘贴后发送" aria-label="复制文字并打开官方 Chat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg>
+      </button>
+    </form>
+    <button type="button" id="chat-orb" hidden title="展开 Chat" aria-label="展开 Chat">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a8 8 0 0 1-8 8H5l-3 2v-7a8 8 0 1 1 18-3Z"/><path d="M7 11h.01M11 11h.01M15 11h.01"/></svg>
+    </button>
+    <p id="hint" hidden aria-live="polite"></p>
+  </main>
+  <script src="i18n.cjs"></script>
+  <script src="core.cjs"></script>
+  <script src="layout.cjs"></script>
+  <script src="puppet.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>
