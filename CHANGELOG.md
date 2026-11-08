@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1
+
+- Fixed invalid macOS signatures left over from the original Electron executable after repackaging. Both macOS architectures now receive a fresh ad-hoc signature and sealed resources.
+- The build verifies the complete application after signing and verifies it again after extracting the final ZIP. Invalid signatures now fail the build.
+- This is local integrity signing, not Developer ID signing or Apple notarization. Internet downloads may still need an explicit per-app approval in macOS Privacy & Security.
+
 ## 0.5.0
 
 - The Chat plus button now adds files or images. Images can also be pasted into the input, and files dropped onto the bar.

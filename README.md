@@ -21,17 +21,17 @@
 
 ## 安装
 
-从 [Releases](https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/releases/latest) 下载 **0.5.0** 对应的 ZIP：
+从 [Releases](https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/releases/latest) 下载 **0.5.1** 对应的 ZIP：
 
 | 系统 | 文件 | 使用方式 |
 | --- | --- | --- |
-| macOS · Apple Silicon | `ShadowCyrene-0.5.0-macOS-arm64.zip` | 解压，将 `ShadowCyrene.app` 拖至应用程序目录 |
-| macOS · Intel | `ShadowCyrene-0.5.0-macOS-x64.zip` | 同上 |
-| Windows 10/11 · x64 | `ShadowCyrene-0.5.0-Windows-x64.zip` | 完整解压，运行 `ShadowCyrene.exe`，不要单独移动 EXE |
+| macOS · Apple Silicon | `ShadowCyrene-0.5.1-macOS-arm64.zip` | 解压，将 `ShadowCyrene.app` 拖至应用程序目录 |
+| macOS · Intel | `ShadowCyrene-0.5.1-macOS-x64.zip` | 同上 |
+| Windows 10/11 · x64 | `ShadowCyrene-0.5.1-Windows-x64.zip` | 完整解压，运行 `ShadowCyrene.exe`，不要单独移动 EXE |
 
 macOS 在 Apple Silicon 本机测试。Intel Mac 与 Windows x64 完成构建、架构、图标资源和包内容核对，尚未真机验证；暂未提供 Windows ARM 原生包。
 
-这是个人构建，未做 Apple 公证或 Windows Authenticode 签名；若系统拦截，请使用系统提供的打开确认入口。程序不会自动设置开机启动。
+macOS 包使用有效的 **ad-hoc 本地签名**，构建后及 ZIP 解压后均验证签名和资源完整性。它不等同于 Developer ID 签名或 Apple 公证；Windows 包也未做 Authenticode 签名。互联网下载仍可能需要你在 macOS「系统设置 → 隐私与安全性 → 仍要打开」中单独允许本应用。参见 [Apple 官方说明](https://support.apple.com/en-us/102445)。不要关闭全局安全保护。程序默认不自动设置开机启动。
 
 ## 显示和操作
 

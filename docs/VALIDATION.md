@@ -1,6 +1,6 @@
 # Release validation
 
-Version: 0.5.0
+Version: 0.5.1
 
 - 28 logic checks passed: gaze, blinking, directional running and speed, quota interpretation, screen layout, conversation stream handling, local authenticated detection and preference migration.
 - All five interface languages were checked in a real Electron window. Window/menu/chat titles consistently use ShadowCyrene, language preferences persist and existing message text is preserved.
@@ -11,3 +11,5 @@ Version: 0.5.0
 - UI preview data is simulated and labelled as such. These checks do not generate model responses.
 
 Reproduce using `npm test`, `npm run qa -- --qa-language-motion`, the platform build commands, and `node scripts/verify-release.cjs`.
+
+- macOS resource seals and deep/strict code signatures are checked after signing and again after extracting both final ZIPs. Ad-hoc integrity verification does not establish Developer ID trust or Apple notarization.

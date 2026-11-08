@@ -1,6 +1,6 @@
 {
   "name": "shadowcyrene-deskpet-codex",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "description": "ShadowCyrene desktop companion for macOS and Windows",
   "author": "shadows204",
@@ -38,7 +38,7 @@
     ],
     "mac": {
       "category": "public.app-category.utilities",
-      "identity": null,
+      "identity": "-",
       "hardenedRuntime": false,
       "icon": "Resources/icon.icns",
       "extendInfo": {
@@ -53,7 +53,9 @@
       "icon": "Resources/icon.ico",
       "artifactName": "ShadowCyrene-${version}-Windows-${arch}.zip",
       "signExecutable": false
-    }
+    },
+    "afterSign": "scripts/verify-macos-signature.cjs",
+    "afterAllArtifactBuild": "scripts/verify-macos-archives.cjs"
   },
   "repository": {
     "type": "git",

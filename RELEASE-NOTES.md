@@ -1,25 +1,22 @@
-# ShadowCyrene 0.5.0
+# ShadowCyrene 0.5.1
 
-首次公开发布。独立桌宠，支持 macOS 与 Windows。
+修复 macOS 打开时提示“已损坏”的签名问题。
 
-- Chat ＋号支持添加文件和图片、直接粘贴图片、拖放文件，并显示可移除的附件预览。PDF/Word 发送提取正文；图片使用真正的图片输入。
-- 附件仅在点击直发后提交；失败或断线保留草稿，6 个／每个 10 MB／合计 20 MB。
-- 程序、人物、Chat 标签及检测插件统一显示 **ShadowCyrene**，五种语言下名字保持一致。
-- 修复图标留白过多、菜单栏只显示一个小点的问题。应用与托盘分别使用头像裁切，支持高清屏；Windows EXE 内嵌新图标与产品名称。
-- Windows 常驻托盘，不占任务栏；托盘单击显示／隐藏，右键可退出。
-- 简体中文、繁体中文、English、Français、日本語；拖动左右跑步、连续目光跟随、可收起 Chat、粉色渐隐消息、点击显示额度。
-- 可选配套检测插件和同账户桌宠专属 Codex/Work 会话。更名后需从桌宠菜单安装新名称的检测插件；旧偏好和会话引用自动迁移。
+- 0.5.0 在修改 Electron 名称与资源后未重新签名，原始签名失效。0.5.1 对 macOS arm64/x64 重新进行本地签名并封装完整资源。
+- 构建后和最终 ZIP 解压后都必须通过 `codesign --verify --deep --strict`，否则停止发布。
+- 保留 0.5.0 的文件/图片附件、五种语言、托盘、目光跟随与跑步动画功能。
 
-## 下载
+**签名范围：**这是有效的 ad-hoc 本地完整性签名，不是 Developer ID 签名，也没有 Apple 公证。通过互联网下载后，仍可能需要在「系统设置 → 隐私与安全性 → 仍要打开」中单独允许本应用。无需关闭全局安全保护。详见 [Apple 官方说明](https://support.apple.com/en-us/102445)。
 
 | 文件 | 平台 |
 | --- | --- |
-| `ShadowCyrene-0.5.0-macOS-arm64.zip` | Apple Silicon Mac |
-| `ShadowCyrene-0.5.0-macOS-x64.zip` | Intel Mac |
-| `ShadowCyrene-0.5.0-Windows-x64.zip` | Windows 10/11 x64，完整解压后运行 |
-| `ShadowCyrene-0.5.0-source.zip` | 完整源码与素材，不含个人数据 |
-| `SHA256SUMS.txt` | 下载文件校验 |
+| `ShadowCyrene-0.5.1-macOS-arm64.zip` | Apple Silicon Mac |
+| `ShadowCyrene-0.5.1-macOS-x64.zip` | Intel Mac |
+| `ShadowCyrene-0.5.1-Windows-x64.zip` | Windows 10/11 x64，完整解压后运行 |
+| `ShadowCyrene-0.5.1-source.zip` | 完整源码与素材 |
+| `ShadowCyrene-0.5.1-plugin-installer.zip` | 配套插件安装包，macOS / Windows |
+| `SHA256SUMS.txt` | 文件校验 |
 
-macOS Apple Silicon 本机验证；Intel Mac 与 Windows x64 完成构建、架构、图标及包内容检查，尚未真机测试。个人构建未签名／公证。
+macOS Apple Silicon 本机验证；Intel Mac 和 Windows x64 完成构建及包内容检查，未做目标机器实测。个人非官方同人作品，与 OpenAI、HoYoverse 无隶属或赞助关系。
 
-本程序为非官方同人作品，与 OpenAI、HoYoverse 无隶属或赞助关系。聊天使用桌宠专属 Codex/Work 会话并消耗相应订阅额度，不接管官方当前对话。详细使用说明见仓库 README。
+**配套插件：**应用内已自带插件与安装入口，右键人物 → 安装／更新配套检测插件。独立 ZIP 方便分发，复用已安装桌宠的运行环境，无须额外安装 Node。详见 [插件安装说明](https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/tree/main/plugin-installer-kit)。

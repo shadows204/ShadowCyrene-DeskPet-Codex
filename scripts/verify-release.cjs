@@ -30,7 +30,8 @@ const strings=version?.getStringValues(version.getAllLanguagesForStringValues()[
 report.windows={iconSizes:embedded.map(i=>i.width||256),iconsMatch:embedded.length===expected.length&&embedded.every((i,n)=>iconHash(i)===iconHash(expected[n])),productName:strings.ProductName,fileDescription:strings.FileDescription};
 report.windows.ok=report.windows.iconsMatch&&strings.ProductName==='ShadowCyrene'&&strings.FileDescription==='ShadowCyrene';
 report.macIcons=['mac-arm64','mac'].map(dir=>{const actual=fs.readFileSync(path.join(root,`dist/${dir}/ShadowCyrene.app/Contents/Resources/icon.icns`));return{directory:dir,matches:hash(actual)===hash(fs.readFileSync(path.join(root,'Resources/icon.icns')))};});
-report.ok=report.targets.every(t=>t.ok)&&report.windows.ok&&report.macIcons.every(i=>i.matches);
+report.macSignatures=['mac-arm64','mac'].map(dir=>require('./verify-macos-signature.cjs').verifyApp(path.join(root,`dist/${dir}/ShadowCyrene.app`)));
+report.ok=report.targets.every(t=>t.ok)&&report.windows.ok&&report.macIcons.every(i=>i.matches)&&report.macSignatures.every(s=>s.signatureValid);
 fs.writeFileSync(path.join(root,'qa/packaged-files-report.json'),JSON.stringify(report,null,2));
-console.log(JSON.stringify({ok:report.ok,targets:report.targets.map(t=>({name:t.name,ok:t.ok,files:t.files.length,noAccountFiles:t.noAccountFiles})),windows:report.windows,macIcons:report.macIcons},null,2));
+console.log(JSON.stringify({ok:report.ok,targets:report.targets.map(t=>({name:t.name,ok:t.ok,files:t.files.length,noAccountFiles:t.noAccountFiles})),windows:report.windows,macIcons:report.macIcons,macSignatures:report.macSignatures},null,2));
 if(!report.ok)process.exitCode=1;
