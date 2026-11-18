@@ -4,7 +4,7 @@
 
 <h1 align="center">ShadowCyrene</h1>
 <p align="center">A desktop companion for macOS & Windows, with cursor-following gaze and optional Codex chat.<br>跟随目光、拖动跑步、粉色消息和可收起 Chat 栏的独立桌宠。</p>
-<p align="center"><a href="https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/releases/latest">下载 Download</a> · <a href="#安装">安装</a> · <a href="#直接聊天与检测插件">连接 Chat</a> · <a href="#开发与构建">源码构建</a></p>
+<p align="center"><a href="#安装">下载与安装</a> · <a href="#直接聊天与检测插件">连接 Chat</a> · <a href="#开发与构建">源码构建</a></p>
 
 **ShadowCyrene 在所有语言中使用同一个名字。** 界面支持简体中文、繁體中文、English、Français、日本語。这是独立的非官方同人程序，不修改 ChatGPT/Codex 安装文件。
 
@@ -21,12 +21,12 @@
 
 ## 安装
 
-从 [Releases](https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/releases/latest) 下载 **0.5.1** 对应的 ZIP：
+macOS 下载 [0.5.3](https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/releases/tag/v0.5.3)。Windows 下载 [0.5.1](https://github.com/shadows204/ShadowCyrene-DeskPet-Codex/releases/tag/v0.5.1)。
 
 | 系统 | 文件 | 使用方式 |
 | --- | --- | --- |
-| macOS · Apple Silicon | `ShadowCyrene-0.5.1-macOS-arm64.zip` | 解压，将 `ShadowCyrene.app` 拖至应用程序目录 |
-| macOS · Intel | `ShadowCyrene-0.5.1-macOS-x64.zip` | 同上 |
+| macOS 13+ · Apple Silicon | `ShadowCyrene-0.5.3-macOS-arm64.zip` | 解压，将 `ShadowCyrene.app` 拖至应用程序目录 |
+| macOS 13+ · Intel | `ShadowCyrene-0.5.3-macOS-x64.zip` | 同上 |
 | Windows 10/11 · x64 | `ShadowCyrene-0.5.1-Windows-x64.zip` | 完整解压，运行 `ShadowCyrene.exe`，不要单独移动 EXE |
 
 macOS 在 Apple Silicon 本机测试。Intel Mac 与 Windows x64 完成构建、架构、图标资源和包内容核对，尚未真机验证；暂未提供 Windows ARM 原生包。
