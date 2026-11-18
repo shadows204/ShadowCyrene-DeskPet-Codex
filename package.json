@@ -1,11 +1,12 @@
 {
   "name": "shadowcyrene-deskpet-codex",
-  "version": "0.5.1",
+  "version": "0.5.3",
   "private": true,
   "description": "ShadowCyrene desktop companion for macOS and Windows",
   "author": "shadows204",
   "main": "app/main.cjs",
   "scripts": {
+    "prestart": "node scripts/build-macos-observer.cjs",
     "start": "electron .",
     "test": "node --test Tests/*.test.cjs",
     "probe": "node scripts/probe.cjs",
@@ -54,6 +55,7 @@
       "artifactName": "ShadowCyrene-${version}-Windows-${arch}.zip",
       "signExecutable": false
     },
+    "afterPack": "scripts/build-macos-observer.cjs",
     "afterSign": "scripts/verify-macos-signature.cjs",
     "afterAllArtifactBuild": "scripts/verify-macos-archives.cjs"
   },

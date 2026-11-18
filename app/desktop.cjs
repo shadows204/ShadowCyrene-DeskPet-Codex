@@ -5,12 +5,14 @@ const path = require('node:path');
 const {QuotaClient} = require('./quota-client.cjs');
 const {quotaView, clampPosition} = require('./core.cjs');
 const {detectOfficialApp, findCLI, openOfficialApp} = require('./platform.cjs');
-const {computeLayout}=require('./layout.cjs');
+const {computeLayout,fitOverlay}=require('./layout.cjs');
 const {PresenceBridge}=require('./bridge.cjs');
 const {ChatClient}=require('./chat-client.cjs');
 const {installBridge}=require('./plugin-installer.cjs');
 const I18n=require('./i18n.cjs');
 const {migrateUserData,legacyDataName}=require('./migration.cjs');
+const {watchMacOverlay}=require('./macos-overlay.cjs');
+const {placeStoreOverlay}=require('./macos-placement.cjs');
 const {AttachmentStore,AttachmentError,turnInput,stopDocumentReaders,EXTENSIONS,MAX_FILE_BYTES}=require('./attachments.cjs');
 const attachments=new AttachmentStore({imageProcessor:bytes=>{
   const image=nativeImage.createFromBuffer(bytes);if(image.isEmpty())throw new AttachmentError('图片无法读取，请改用 PNG、JPEG 或 WebP。');
@@ -29,21 +31,55 @@ let qaLastSubmission;
 const T=(source,vars)=>I18n.t(source,settings?.language,vars);
 const QA = process.argv.includes('--qa');
 const SMOKE = process.argv.includes('--smoke');
+const storeOverlayQA=QA&&process.argv.includes('--qa-store-overlay');
+const compactMacWindow = process.platform === 'darwin' && (!QA || storeOverlayQA);
 const qaOutput = process.env.SHADOWCYRENE_QA_OUTPUT || path.join(__dirname, '../qa');
 const bridgeFile=process.env.SHADOWCYRENE_BRIDGE_FILE||(SMOKE?path.join(qaOutput,'bridge.json'):undefined);
 app.setName('ShadowCyrene');
 if (QA || SMOKE) app.setPath('userData', path.join(qaOutput, QA?'electron-qa-data':'electron-smoke-data'));
 let display,anchor,composerHeight=40,presence,chatClient,chatBroadcastTimer;
-let visibility={bubble:false,messages:false};
+let visibility={bubble:false,messages:false,hint:false}, overlayBounds;
 let win, tray, settings, settingsFile, client, regions = [], cursorTimer, statusTimer, refreshTimer, saving;
 let dragging, ignore = false, watching = false, nextConnect = 0, connecting = false, quitting = false, hidden = false;
+let macOverlayContext={store:false,paymentWindows:[]};
+let currentWindowLevel,overlayBehindStore=false;
+let stopOverlayObserver,initialOverlayTimer;
+let overlayReady=process.platform!=='darwin'||QA;
 let state = {settings: {}, connected: false, appRunning: null, quota: null, updatedAt: null, error: '', shortcut: '', theme: 'light',pluginConnected:false,chatState:{messages:[],busy:false}};
 const defaults = {language:'zh-CN',bubble: true, chat: true, chatCollapsed:false, gaze: 'global', reducedMotion: false, alwaysOnTop: true, theme: 'system', shortcut: 'Alt+Space', selectedBucket: 'codex',scale:1,petScale:1,chatScale:1,panelScale:1,messageMode:'single',messageLines:6};
 function relayout(){
   if(!display||!anchor)return;
   const area=display.workArea;
-  state.layout=computeLayout({width:area.width,height:area.height,anchor:{x:anchor.x-area.x,y:anchor.y-area.y},settings:{...settings,offlineHint:state.appRunning===false},composerHeight,...visibility});
-  anchor={x:area.x+state.layout.pet.x,y:area.y+state.layout.pet.y};
+  const layoutSettings={...settings,offlineHint:state.appRunning===false};
+  const layout=computeLayout({width:area.width,height:area.height,anchor:{x:anchor.x-area.x,y:anchor.y-area.y},settings:layoutSettings,composerHeight,...visibility});
+  anchor={x:area.x+layout.pet.x,y:area.y+layout.pet.y};
+  const visible={
+    chat:settings.chat!==false,
+    bubble:settings.bubble&&visibility.bubble,
+    messages:settings.messageMode!=='off'&&visibility.messages,
+    hint:settings.chat!==false&&!settings.chatCollapsed&&visibility.hint,
+  };
+  let overlay=compactMacWindow?fitOverlay(layout,area,visible):{layout,bounds:area};
+  if(compactMacWindow&&macOverlayContext.store){
+    overlay=placeStoreOverlay({preferred:overlay,display,displays:screen.getAllDisplays(),anchor,
+      settings:layoutSettings,composerHeight,visible,snapshot:macOverlayContext});
+  }
+  overlayBehindStore=!!overlay.behindStore;
+  state.layout=overlay.layout;
+  const oldBounds=overlayBounds;
+  overlayBounds=overlay.bounds;
+  if(win&&!win.isDestroyed()){
+    updateWindowLevel();
+    if(Object.keys(overlayBounds).some(key=>oldBounds?.[key]!==overlayBounds[key]))win.setBounds(overlayBounds);
+  }
+}
+function updateWindowLevel(){
+  const mode=overlayBehindStore?'behind':!settings.alwaysOnTop?'normal':macOverlayContext.store?'store':'floating';
+  if(mode===currentWindowLevel)return;
+  currentWindowLevel=mode;
+  if(mode==='behind')win.setAlwaysOnTop(true,'normal',-1);
+  else if(mode==='store')win.setAlwaysOnTop(true,'normal',1);
+  else win.setAlwaysOnTop(mode==='floating','floating');
 }
 function saveSettings() {
   clearTimeout(saving);
@@ -61,8 +97,25 @@ function broadcast() {
   if(win&&!win.isDestroyed())win.setTitle(T('ShadowCyrene'));
 }
 function setSetting(name, value) {settings[name] = value; saveSettings(); broadcast();}
-function show() {hidden = false;if(settings.chatCollapsed){settings.chatCollapsed=false;saveSettings();broadcast();}win.show(); win.setSkipTaskbar(true); win.focus(); win.webContents.send('action', 'focus');}
+function show() {
+  hidden=false;
+  if(!overlayReady)return;
+  if(macOverlayContext.store&&macOverlayContext.paymentWindows.length){win.showInactive();return;}
+  if(settings.chatCollapsed){settings.chatCollapsed=false;saveSettings();broadcast();}
+  win.show();win.setSkipTaskbar(true);win.focus();win.webContents.send('action','focus');
+}
 function toggle() {if (hidden || !win.isVisible()) show(); else {hidden = true; win.hide();}}
+function updateOverlayContext(snapshot) {
+  if(quitting||win.isDestroyed())return;
+  macOverlayContext={...snapshot,paymentWindows:Array.isArray(snapshot.paymentWindows)?snapshot.paymentWindows:[]};
+  broadcast();
+  if(!overlayReady)revealInitialOverlay();
+}
+function revealInitialOverlay(){
+  clearTimeout(initialOverlayTimer);
+  overlayReady=true;
+  if(!hidden&&!quitting&&!win.isDestroyed())win.showInactive();
+}
 function registerHotkey() {
   globalShortcut.unregisterAll();
   const preferred = settings.shortcut;
@@ -114,6 +167,7 @@ async function refresh() {
   try {await client.refresh();} catch(e) {state.connected=false; state.error=e.message; broadcast();}
 }
 async function choosePath(kind) {
+  if(macOverlayContext.paymentWindows.length)return;
   const result = await dialog.showOpenDialog(win, {
     title:T(kind === 'cliPath' ? '选择官方 codex 可执行文件（Windows 选择 codex.exe）' : '选择 ChatGPT／Codex 应用'),
     properties: ['openFile'],
@@ -143,8 +197,9 @@ function makeMenu() {
     {label:'桌宠会话',submenu:[{label:'新对话',enabled:!state.chatState.busy,click:()=>{chatClient?.reset();state.chatState={...state.chatState,messages:[],error:''};broadcast();}},{label:'停止回复',enabled:!!state.chatState.busy,click:()=>chatClient?.cancel()},
       {label:'模型',submenu:[{label:'使用官方默认',type:'radio',checked:!settings.chatModel,click:()=>setSetting('chatModel',null)},...(state.chatState.models||[]).map(m=>({label:m.displayName,type:'radio',checked:settings.chatModel===m.model,click:()=>setSetting('chatModel',m.model)}))]}]},
     {label:state.pluginConnected?'配套检测插件已连接':'安装／更新配套检测插件…',click:async()=>{
+      if(macOverlayContext.paymentWindows.length)return;
       const cli=findCLI(settings,state.appPath);if(!cli)return dialog.showErrorBox(T('未找到官方CLI'),T('请先在连接设置中选择官方 Codex CLI。'));
-      try{await installBridge({directory:app.getPath('userData'),executable:process.execPath,cli,developmentRoot:app.isPackaged?null:path.join(__dirname,'..')});dialog.showMessageBox(win,{message:T('配套检测插件已安装'),detail:T('在官方应用中刷新插件，或下次启动新的会话后加载。检测插件实际连接后，Chat栏会自动切换直发。')});}catch{dialog.showErrorBox(T('插件安装未完成'),T('请查看使用说明中的手动安装步骤。已有桌宠仍可使用。'));}
+      try{await installBridge({directory:app.getPath('userData'),executable:process.execPath,cli,developmentRoot:app.isPackaged?null:path.join(__dirname,'..')});if(!macOverlayContext.paymentWindows.length)dialog.showMessageBox(win,{message:T('配套检测插件已安装'),detail:T('在官方应用中刷新插件，或下次启动新的会话后加载。检测插件实际连接后，Chat栏会自动切换直发。')});}catch{if(!macOverlayContext.paymentWindows.length)dialog.showErrorBox(T('插件安装未完成'),T('请查看使用说明中的手动安装步骤。已有桌宠仍可使用。'));}
     }},
     {label:'目光跟随',submenu:[
       {label:'始终跟随全局鼠标',type:'radio',checked:settings.gaze==='global',click:()=>setSetting('gaze','global')},
@@ -152,7 +207,7 @@ function makeMenu() {
       {label:'关闭',type:'radio',checked:settings.gaze==='off',click:()=>setSetting('gaze','off')}
     ]},
     item('减少动态效果','reducedMotion'),
-    {label:'窗口始终置顶',type:'checkbox',checked:settings.alwaysOnTop,click:()=>{setSetting('alwaysOnTop',!settings.alwaysOnTop);win.setSkipTaskbar(true);win.setAlwaysOnTop(settings.alwaysOnTop,'floating');}},
+    {label:'窗口始终置顶',type:'checkbox',checked:settings.alwaysOnTop,click:()=>setSetting('alwaysOnTop',!settings.alwaysOnTop)},
     {label:'动作',submenu:[animate('挥手',3),animate('轻跳',4),animate('思考',7),animate('开心检查',8)]},
     {label:'外观',submenu:['system','light','dark'].map((theme,i)=>({label:['跟随系统','浅色','深色'][i],type:'radio',checked:settings.theme===theme,click:()=>setSetting('theme',theme)}))},
     {label:'额度来源',submenu:(state.quota?.ids || ['codex']).map(id=>({label:id,type:'radio',checked:(state.quota?.id || 'codex')===id,click:()=>{setSetting('selectedBucket',id);refresh();}}))},
@@ -169,7 +224,7 @@ function makeMenu() {
       {label:process.platform==='darwin'?'Option + Shift + Space':'Alt + Shift + Space',type:'radio',checked:settings.shortcut==='Alt+Shift+Space',click:()=>{settings.shortcut='Alt+Shift+Space';saveSettings();registerHotkey();}},
       {label:`当前：${state.shortcut}`,enabled:false}
     ]},
-    {label:'重置人物位置',click:()=>{display=screen.getDisplayNearestPoint(screen.getCursorScreenPoint());win.setBounds(display.workArea);anchor={x:display.workArea.x+display.workArea.width-230,y:display.workArea.y+display.workArea.height-300};broadcast();}},
+    {label:'重置人物位置',click:()=>{display=screen.getDisplayNearestPoint(screen.getCursorScreenPoint());anchor={x:display.workArea.x+display.workArea.width-230,y:display.workArea.y+display.workArea.height-300};broadcast();}},
     {type:'separator'}, {label:'隐藏桌宠',click:()=>{hidden=true;win.hide();}}, {label:'退出ShadowCyrene',click:()=>app.quit()}
   ],settings.language));
 }
@@ -178,6 +233,7 @@ function attachmentUpdate(error=''){
 }
 const attachmentError=e=>e instanceof AttachmentError?e.message:'无法添加附件，请检查文件是否可读。';
 async function pickAttachments(){
+  if(macOverlayContext.paymentWindows.length)return attachmentUpdate();
   if(attachmentsLocked)return attachmentUpdate('正在提交消息，请稍候。');
   win.setIgnoreMouseEvents(false);ignore=false;
   const result=await dialog.showOpenDialog(win,{title:T('添加文件或图片…'),properties:['openFile','multiSelections'],filters:[{name:T('支持的附件'),extensions:EXTENSIONS}]});
@@ -223,16 +279,43 @@ function setupIPC() {
   ipcMain.handle('chat', (e,text)=>verifySender(e)?openChat(text):{ok:false});
   ipcMain.handle('cancel',async e=>{if(verifySender(e))await chatClient?.cancel();});
   ipcMain.on('chat-collapse',(e,value)=>{if(verifySender(e)&&typeof value==='boolean')setSetting('chatCollapsed',value);});
-  ipcMain.on('visibility',(e,value)=>{if(!verifySender(e)||typeof value!=='object')return;const next={bubble:!!value.bubble,messages:!!value.messages};if(next.bubble!==visibility.bubble||next.messages!==visibility.messages){visibility=next;broadcast();}});
+  ipcMain.on('visibility',(e,value)=>{if(!verifySender(e)||!value||typeof value!=='object')return;const next={bubble:!!value.bubble,messages:!!value.messages,hint:!!value.hint};if(Object.keys(next).some(key=>next[key]!==visibility[key])){visibility=next;broadcast();}});
   ipcMain.on('composer-height',(e,value)=>{if(verifySender(e)&&Number.isFinite(value)){const next=Math.max(40,Math.min(140,value));if(next!==composerHeight){composerHeight=next;broadcast();}}});
   ipcMain.on('regions',(e,value)=>{if(verifySender(e)&&Array.isArray(value))regions=value.slice(0,16).filter(r=>[r.x,r.y,r.width,r.height].every(Number.isFinite));});
-  ipcMain.on('menu',e=>{if(verifySender(e)){win.setIgnoreMouseEvents(false);ignore=false;makeMenu().popup({window:win});}});
-  ipcMain.on('command',(e,action)=>{if(!verifySender(e))return;if(action==='hide'){hidden=true;win.hide();}else if(action==='menu')makeMenu().popup({window:win});});
+  ipcMain.on('menu',e=>{if(verifySender(e)&&!macOverlayContext.paymentWindows.length){win.setIgnoreMouseEvents(false);ignore=false;makeMenu().popup({window:win});}});
+  ipcMain.on('command',(e,action)=>{if(!verifySender(e))return;if(action==='hide'){hidden=true;win.hide();}else if(action==='menu'&&!macOverlayContext.paymentWindows.length)makeMenu().popup({window:win});});
   ipcMain.on('drag',(e,value)=>{
     if(!verifySender(e))return;
-    if(value?.phase==='start'){const p=screen.getCursorScreenPoint();dragging={origin:{...anchor},cursor:p,last:p,lastTime:performance.now()};win.webContents.send('action','drag-start');}
-    if(value?.phase==='end'){if(dragging){const p=screen.getCursorScreenPoint();anchor={x:dragging.origin.x+p.x-dragging.cursor.x,y:dragging.origin.y+p.y-dragging.cursor.y};relayout();win.webContents.send('layout',state.layout);}dragging=null;win.webContents.send('action','drag-end');settings.petAnchor={...anchor};saveSettings();}
+    if(value?.phase==='start'){
+      const cursor=screen.getCursorScreenPoint();
+      const pet=state.layout.pet;
+      const rendered={x:overlayBounds.x+pet.x,y:overlayBounds.y+pet.y};
+      dragging={origin:rendered,cursor,last:cursor,lastTime:performance.now(),moved:false};
+      win.webContents.send('action','drag-start');
+    }
+    if(value?.phase==='end'){
+      if(dragging){
+        const cursor=screen.getCursorScreenPoint();
+        if(movedCursor(cursor)){
+          movePetWithCursor(cursor);
+          settings.petAnchor={...anchor};
+          saveSettings();
+        }
+      }
+      dragging=null;
+      win.webContents.send('action','drag-end');
+    }
   });
+}
+function movedCursor(cursor){
+  return dragging.moved||Math.hypot(cursor.x-dragging.cursor.x,cursor.y-dragging.cursor.y)>=5;
+}
+function movePetWithCursor(cursor){
+  dragging.moved=true;
+  display=screen.getDisplayNearestPoint(cursor);
+  anchor={x:dragging.origin.x+cursor.x-dragging.cursor.x,y:dragging.origin.y+cursor.y-dragging.cursor.y};
+  relayout();
+  win.webContents.send('layout',state.layout);
 }
 function tickCursor() {
   if (!win || win.isDestroyed() || !win.isVisible()) return;
@@ -241,8 +324,7 @@ function tickCursor() {
   if (dragging) {
     const now=performance.now(),dt=Math.max(1,now-dragging.lastTime);
     motion={active:true,vx:(cursor.x-dragging.last.x)*1000/dt,vy:(cursor.y-dragging.last.y)*1000/dt};dragging.last=cursor;dragging.lastTime=now;
-    const target={x:dragging.origin.x+cursor.x-dragging.cursor.x,y:dragging.origin.y+cursor.y-dragging.cursor.y};
-    const d=screen.getDisplayNearestPoint(cursor);if(d.id!==display.id){display=d;win.setBounds(d.workArea);}anchor=target;relayout();win.webContents.send('layout',state.layout);
+    if(movedCursor(cursor))movePetWithCursor(cursor);
   }
   const [x,y]=win.getPosition();const local={x:cursor.x-x,y:cursor.y-y};
   const interactive=!!dragging||regions.some(r=>local.x>=r.x&&local.x<=r.x+r.width&&local.y>=r.y&&local.y<=r.y+r.height);
@@ -274,9 +356,9 @@ else {
     display=screen.getPrimaryDisplay();
     anchor=settings.petAnchor||(settings.position?{x:settings.position.x+198,y:settings.position.y+58}:null)||{x:display.workArea.x+display.workArea.width-230,y:display.workArea.y+display.workArea.height-300};
     display=screen.getDisplayNearestPoint(anchor);relayout();
-    win=new BrowserWindow({...display.workArea,frame:false,transparent:true,resizable:false,hasShadow:false,show:false,skipTaskbar:true,alwaysOnTop:settings.alwaysOnTop,
+    win=new BrowserWindow({...overlayBounds,frame:false,transparent:true,resizable:false,hasShadow:false,show:false,skipTaskbar:true,alwaysOnTop:settings.alwaysOnTop,
       title:'ShadowCyrene',icon:path.join(__dirname,'../Resources/icon.png'),webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:true}});
-    win.setAlwaysOnTop(settings.alwaysOnTop,'floating');
+    updateWindowLevel();
     win.setIgnoreMouseEvents(true,{forward:true});ignore=true;
     if(process.platform==='darwin') {win.setVisibleOnAllWorkspaces(true,{visibleOnFullScreen:true});app.dock?.hide();}
     win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
@@ -288,7 +370,16 @@ else {
     win.on('show',()=>win.setSkipTaskbar(true));
     win.on('blur',()=>win.webContents.send('action','blur'));
     await win.loadFile(path.join(__dirname,'index.html'));
-    win.showInactive();broadcast();
+    if (!overlayReady) {
+      const executable = app.isPackaged
+        ? path.join(process.resourcesPath, '../Helpers/foreground-app')
+        : path.join(__dirname, '../dist/dev/foreground-app');
+      stopOverlayObserver = watchMacOverlay(executable, updateOverlayContext);
+      // Wait for placement before showing the pet during app startup or login.
+      // The pet remains usable if the helper is unavailable.
+      initialOverlayTimer=setTimeout(revealInitialOverlay,1500);
+    }else win.showInactive();
+    broadcast();
     if(!QA){
       const icon=nativeImage.createFromPath(path.join(__dirname,process.platform==='win32'?'../Resources/tray-win.png':'../Resources/tray.png'));
       tray=new Tray(icon);tray.setToolTip('ShadowCyrene');tray.setContextMenu(makeMenu());tray.on('double-click',show);if(process.platform==='win32')tray.on('click',toggle);
@@ -297,15 +388,23 @@ else {
       nativeTheme.on('updated',broadcast);powerMonitor.on('resume',()=>{disconnect();nextConnect=0;watchApp();});
       presence=new PresenceBridge({...(bridgeFile?{file:bridgeFile}:{}),onChange:active=>{state.pluginConnected=active;broadcast();}});
       try{await presence.start();}catch{state.error='本机插件连接服务未启动。';}
-      screen.on('display-metrics-changed',()=>{display=screen.getDisplayNearestPoint(anchor);win.setBounds(display.workArea);broadcast();});
-      screen.on('display-removed',()=>{display=screen.getDisplayNearestPoint(anchor);win.setBounds(display.workArea);broadcast();});
+      screen.on('display-metrics-changed',()=>{display=screen.getDisplayNearestPoint(anchor);broadcast();});
+      screen.on('display-removed',()=>{display=screen.getDisplayNearestPoint(anchor);broadcast();});
       watchApp();
       if(SMOKE)runSmoke();
+    }else if(storeOverlayQA){
+      try{
+        await require('./qa-store-overlay.cjs').run({win,screen,settings,state,broadcast,
+          setAnchor:value=>{anchor=value;broadcast();},updateOverlayContext,qaOutput});
+        app.quit();
+      }catch(error){console.error(error);app.exit(1);}
     }else await runQA();
   });
 }
 app.on('before-quit',event=>{
   if(quitting)return;event.preventDefault();quitting=true;
+  clearTimeout(initialOverlayTimer);
+  stopOverlayObserver?.();
   clearTimeout(chatBroadcastTimer);clearInterval(cursorTimer);clearInterval(statusTimer);clearInterval(refreshTimer);clearTimeout(saving);disconnect();attachments.clear();stopDocumentReaders();globalShortcut.unregisterAll();tray?.destroy();
   if(settings&&settingsFile&&!QA&&!SMOKE)try{settings.petAnchor=anchor;fs.mkdirSync(path.dirname(settingsFile),{recursive:true});fs.writeFileSync(settingsFile,JSON.stringify(settings,null,2),{mode:0o600});}catch{}
   Promise.allSettled([presence?.stop(),chatClient?.stop()]).then(()=>app.quit());

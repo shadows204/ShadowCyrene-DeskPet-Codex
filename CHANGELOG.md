@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.3
+
+- macOS uses a window sized to the visible pet and panels. ShadowCyrene stays on screen in App Store and moves aside when its window would overlap the purchase confirmation area. It returns to its saved position when you leave the Store.
+- When a system window covers all available space, macOS can cover the pet temporarily.
+
+## 0.5.2
+
+- On macOS, ShadowCyrene hides its overlay while the App Store is in the foreground so it leaves room for the purchase confirmation. The pet returns without taking focus when you switch to another app. A pet you hid manually stays hidden.
+
 ## 0.5.1
 
 - Fixed invalid macOS signatures left over from the original Electron executable after repackaging. Both macOS architectures now receive a fresh ad-hoc signature and sealed resources.

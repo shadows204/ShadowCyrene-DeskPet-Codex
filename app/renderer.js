@@ -100,9 +100,9 @@ function applyLayout(){
   face={x:layout.pet.x+layout.pet.width/2,y:layout.pet.y+64*layout.pet.scale,scale:layout.pet.scale};
   const w=Math.round(layout.pet.width*devicePixelRatio),h=Math.round(layout.pet.height*devicePixelRatio);
   if(pet.width!==w||pet.height!==h){pet.width=w;pet.height=h;}
-  $('hint').style.left=`${Math.max(6,Math.min(innerWidth-366,layout.chat.x+(layout.chat.width-360)/2))}px`;
-  const below=layout.chat.y+layout.chat.height+5;
-  $('hint').style.top=`${below+16<=innerHeight?below:Math.max(4,layout.chat.y-22)}px`;
+  $('hint').style.left=`${layout.hint.x}px`;
+  $('hint').style.top=`${layout.hint.y}px`;
+  $('hint').style.width=`${layout.hint.width}px`;
 }
 function updateChatMode(){
   const busy=!!state.chatState?.busy||submitting;
@@ -161,7 +161,10 @@ function renderMessages(){
 function reportRegions(){
   const rects=[pet,...[$('quota'),$('composer'),$('chat-orb'),$('messages')].filter(e=>!e.hidden)].map(e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};});
   window.companion.regions(rects);
-  const visibility={bubble:!$('quota').hidden,messages:!$('messages').hidden};const key=JSON.stringify(visibility);
+  const visibility={
+    bubble:!$('quota').hidden,messages:!$('messages').hidden,
+    hint:!$('hint').hidden&&(document.body.dataset.message==='true'||document.activeElement===$('prompt')),
+  };const key=JSON.stringify(visibility);
   if(lastVisibility!==key){lastVisibility=key;window.companion.visibility(visibility);}
 }
 function updateHint(){
@@ -171,7 +174,7 @@ function updateHint(){
   $('hint').hidden=!state.settings.chat||!!state.settings.chatCollapsed||(!transient&&!pasteAllowed);
   document.body.dataset.message=String(!!transient);
 }
-function showMessage(text,pasteRelated=false){notice=text;noticeIsPaste=pasteRelated;clearTimeout(messageTimer);updateHint();messageTimer=setTimeout(()=>{notice='';updateHint();},6000);}
+function showMessage(text,pasteRelated=false){notice=text;noticeIsPaste=pasteRelated;clearTimeout(messageTimer);updateHint();reportRegions();messageTimer=setTimeout(()=>{notice='';updateHint();reportRegions();},6000);}
 function updateBubble(){$('quota').hidden=!state.settings.bubble||performance.now()>=bubbleUntil;}
 function showQuota(){
   if(!state.settings.bubble)return;
@@ -187,6 +190,8 @@ pet.addEventListener('dblclick',()=>{animation={row:3,start:performance.now()};}
 pet.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();showQuota();}if(e.key==='ContextMenu')window.companion.menu();});
 document.addEventListener('contextmenu',e=>{if(e.target!==$('prompt')){e.preventDefault();window.companion.menu();}});
 $('options').addEventListener('click',async()=>{const result=await window.companion.pickAttachments();if(result?.error)showMessage(result.error);});
+$('prompt').addEventListener('focus',()=>requestAnimationFrame(reportRegions));
+$('prompt').addEventListener('blur',()=>requestAnimationFrame(reportRegions));
 $('refresh').addEventListener('click',()=>window.companion.refresh());
 $('collapse-chat').addEventListener('click',()=>{$('prompt').blur();window.companion.collapseChat(true);});
 $('chat-orb').addEventListener('click',()=>{focusAfterExpand=true;window.companion.collapseChat(false);});
